@@ -27,24 +27,14 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
                             private val cipherSuites: Array<String>, private val shouldFail: Boolean) {
     companion object {
         private val CIPHER_SUITES_ALL = arrayOf(
-                "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
-                "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
-        )
-
-        private val CIPHER_SUITES_JUST_RSA = arrayOf(
-                "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
-        )
-
-        private val CIPHER_SUITES_JUST_EC = arrayOf(
-                "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+                "TLS_AES_128_GCM_SHA256",
+                "TLS_CHACHA20_POLY1305_SHA256"
         )
 
         @Parameterized.Parameters(name = "ServerAlgo: {0}, ClientAlgo: {1}, Should fail: {3}")
         @JvmStatic
         fun data() = listOf(
-                arrayOf("ec", "ec", CIPHER_SUITES_ALL, false), arrayOf("rsa", "rsa", CIPHER_SUITES_ALL, false), arrayOf("ec", "rsa", CIPHER_SUITES_ALL, false), arrayOf("rsa", "ec", CIPHER_SUITES_ALL, false),
-                arrayOf("ec", "ec", CIPHER_SUITES_JUST_RSA, true), arrayOf("rsa", "rsa", CIPHER_SUITES_JUST_RSA, false), arrayOf("ec", "rsa", CIPHER_SUITES_JUST_RSA, true), arrayOf("rsa", "ec", CIPHER_SUITES_JUST_RSA, false),
-                arrayOf("ec", "ec", CIPHER_SUITES_JUST_EC, false), arrayOf("rsa", "rsa", CIPHER_SUITES_JUST_EC, true), arrayOf("ec", "rsa", CIPHER_SUITES_JUST_EC, false), arrayOf("rsa", "ec", CIPHER_SUITES_JUST_EC, true)
+                arrayOf("ec", "ec", CIPHER_SUITES_ALL, false), arrayOf("rsa", "rsa", CIPHER_SUITES_ALL, false), arrayOf("ec", "rsa", CIPHER_SUITES_ALL, false), arrayOf("rsa", "ec", CIPHER_SUITES_ALL, false)
         )
 
         private val logger = contextLogger()
