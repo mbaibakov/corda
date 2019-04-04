@@ -24,20 +24,47 @@ import kotlin.test.assertTrue
 
 @RunWith(Parameterized::class)
 class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAlgo: String,
-                            private val cipherSuites: Array<String>, private val shouldFail: Boolean) {
+                            private val cipherSuites: CipherSuites, private val shouldFail: Boolean,
+                            private val serverProtocols: TlsProtocols, private val clientProtocols: TlsProtocols) {
     companion object {
-        private val CIPHER_SUITES_ALL = arrayOf(
-                "TLS_AES_128_GCM_SHA256",
-                "TLS_CHACHA20_POLY1305_SHA256"
-        )
 
-        @Parameterized.Parameters(name = "ServerAlgo: {0}, ClientAlgo: {1}, Should fail: {3}")
+
+        @Parameterized.Parameters(name = "ServerAlgo: {0}, ClientAlgo: {1}, CipherSuites: {2}, Should fail: {3}, ServerProtocols: {4}, ClientProtocols: {5}")
         @JvmStatic
-        fun data() = listOf(
-                arrayOf("ec", "ec", CIPHER_SUITES_ALL, false), arrayOf("rsa", "rsa", CIPHER_SUITES_ALL, false), arrayOf("ec", "rsa", CIPHER_SUITES_ALL, false), arrayOf("rsa", "ec", CIPHER_SUITES_ALL, false)
-        )
+        fun data(): List<Array<Any>> {
+
+            val allAlgos = listOf("ec", "rsa")
+            return allAlgos.flatMap {
+                serverAlgo -> allAlgos.flatMap {
+                    clientAlgo -> listOf(
+                        // newServerOldClient
+                        arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.BOTH, Companion.TlsProtocols.ONE_2),
+                        // oldServerNewClient
+                        arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.ONE_2, Companion.TlsProtocols.BOTH),
+                        // newServerNewClient
+                        arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.BOTH, Companion.TlsProtocols.BOTH)
+                    )
+                }
+            }
+        }
 
         private val logger = contextLogger()
+
+        enum class TlsProtocols(val versions: Array<String>) {
+            BOTH(arrayOf("TLSv1.2", "TLSv1.3")),
+            ONE_2(arrayOf("TLSv1.2"))
+        }
+
+        enum class CipherSuites(val algos: Array<String>) {
+            CIPHER_SUITES_ALL(arrayOf(
+                    // 1.3 only
+                    "TLS_AES_128_GCM_SHA256",
+                    "TLS_CHACHA20_POLY1305_SHA256",
+                    // 1.2 only
+                    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+                    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+            ))
+        }
     }
 
     @Rule
@@ -47,9 +74,9 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
     @Test
     fun testClientServerTlsExchange() {
 
-        System.setProperty("javax.net.debug", "all")
+        //System.setProperty("javax.net.debug", "all")
 
-        logger.info("Testing: ServerAlgo: $serverAlgo, ClientAlgo: $clientAlgo, Suites: ${cipherSuites.toList()}, Should fail: $shouldFail")
+        logger.info("Testing: ServerAlgo: $serverAlgo, ClientAlgo: $clientAlgo, Suites: ${cipherSuites}, Server protocols: $serverProtocols, Client protocols: $clientProtocols, Should fail: $shouldFail")
 
         val trustStore = CertificateStore.fromResource("net/corda/nodeapi/internal/crypto/keystores/trust.jks", "trustpass", "trustpass")
         val rootCa = trustStore.value.getCertificate("root")
@@ -63,10 +90,9 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
         val serverSocketFactory = createSslContext(serverKeyStore, trustStore).serverSocketFactory
         val clientSocketFactory = createSslContext(clientKeyStore, trustStore).socketFactory
 
-        val protocols = arrayOf("TLSv1.3")
         val serverSocket = (serverSocketFactory.createServerSocket(0) as SSLServerSocket).apply {
             // use 0 to get first free socket
-            val serverParams = SSLParameters(cipherSuites, protocols)
+            val serverParams = SSLParameters(cipherSuites.algos, serverProtocols.versions)
             serverParams.wantClientAuth = true
             serverParams.needClientAuth = true
             serverParams.endpointIdentificationAlgorithm = null // Reconfirm default no server name indication, use our own validator.
@@ -75,7 +101,7 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
         }
 
         val clientSocket = (clientSocketFactory.createSocket() as SSLSocket).apply {
-            val clientParams = SSLParameters(cipherSuites, protocols)
+            val clientParams = SSLParameters(cipherSuites.algos, clientProtocols.versions)
             clientParams.endpointIdentificationAlgorithm = null // Reconfirm default no server name indication, use our own validator.
             sslParameters = clientParams
             useClientMode = true
