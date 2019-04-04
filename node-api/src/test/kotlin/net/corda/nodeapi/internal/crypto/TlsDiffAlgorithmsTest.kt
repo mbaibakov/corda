@@ -57,7 +57,7 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
     @Test
     fun testClientServerTlsExchange() {
 
-        //System.setProperty("javax.net.debug", "all")
+        System.setProperty("javax.net.debug", "all")
 
         logger.info("Testing: ServerAlgo: $serverAlgo, ClientAlgo: $clientAlgo, Suites: ${cipherSuites.toList()}, Should fail: $shouldFail")
 
@@ -73,9 +73,10 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
         val serverSocketFactory = createSslContext(serverKeyStore, trustStore).serverSocketFactory
         val clientSocketFactory = createSslContext(clientKeyStore, trustStore).socketFactory
 
+        val protocols = arrayOf("TLSv1.3")
         val serverSocket = (serverSocketFactory.createServerSocket(0) as SSLServerSocket).apply {
             // use 0 to get first free socket
-            val serverParams = SSLParameters(cipherSuites, arrayOf("TLSv1.2"))
+            val serverParams = SSLParameters(cipherSuites, protocols)
             serverParams.wantClientAuth = true
             serverParams.needClientAuth = true
             serverParams.endpointIdentificationAlgorithm = null // Reconfirm default no server name indication, use our own validator.
@@ -84,7 +85,7 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
         }
 
         val clientSocket = (clientSocketFactory.createSocket() as SSLSocket).apply {
-            val clientParams = SSLParameters(cipherSuites, arrayOf("TLSv1.2"))
+            val clientParams = SSLParameters(cipherSuites, protocols)
             clientParams.endpointIdentificationAlgorithm = null // Reconfirm default no server name indication, use our own validator.
             sslParameters = clientParams
             useClientMode = true
@@ -121,7 +122,7 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
 
         // Double check hostname manually
         val peerChainTry = Try.on { clientSocket.session.peerCertificates.x509 }
-        assertEquals(!shouldFail, peerChainTry.isSuccess)
+        assertEquals(!shouldFail, peerChainTry.isSuccess, "Unexpected outcome: $peerChainTry")
         when(peerChainTry) {
             is Try.Success -> {
                 val peerChain = peerChainTry.getOrThrow()
