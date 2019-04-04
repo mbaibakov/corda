@@ -42,7 +42,9 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
                         // oldServerNewClient
                         arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.ONE_2, Companion.TlsProtocols.BOTH),
                         // newServerNewClient
-                        arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.BOTH, Companion.TlsProtocols.BOTH)
+                        arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.BOTH, Companion.TlsProtocols.BOTH),
+                        // TLS 1.2 eliminated state
+                        arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.ONE_3, Companion.TlsProtocols.ONE_3)
                     )
                 }
             }
@@ -52,7 +54,8 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
 
         enum class TlsProtocols(val versions: Array<String>) {
             BOTH(arrayOf("TLSv1.2", "TLSv1.3")),
-            ONE_2(arrayOf("TLSv1.2"))
+            ONE_2(arrayOf("TLSv1.2")),
+            ONE_3(arrayOf("TLSv1.3"))
         }
 
         enum class CipherSuites(val algos: Array<String>) {
