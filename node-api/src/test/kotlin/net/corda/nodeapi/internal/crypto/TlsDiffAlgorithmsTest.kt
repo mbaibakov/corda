@@ -44,7 +44,9 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
                         // newServerNewClient
                         arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.BOTH, Companion.TlsProtocols.BOTH),
                         // TLS 1.2 eliminated state
-                        arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.ONE_3, Companion.TlsProtocols.ONE_3)
+                        arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, false, Companion.TlsProtocols.ONE_3, Companion.TlsProtocols.ONE_3),
+                        // Old client connecting post TLS 1.2 eliminated state
+                        arrayOf(serverAlgo, clientAlgo, Companion.CipherSuites.CIPHER_SUITES_ALL, true, Companion.TlsProtocols.ONE_3, Companion.TlsProtocols.ONE_2)
                     )
                 }
             }
