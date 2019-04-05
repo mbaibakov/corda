@@ -21,6 +21,11 @@ import kotlin.concurrent.thread
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertNotNull
+import javax.net.ssl.SNIHostName
+import javax.net.ssl.StandardConstants
+
+
 
 @RunWith(Parameterized::class)
 class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAlgo: String,
@@ -81,7 +86,7 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
 
         //System.setProperty("javax.net.debug", "all")
 
-        logger.info("Testing: ServerAlgo: $serverAlgo, ClientAlgo: $clientAlgo, Suites: ${cipherSuites}, Server protocols: $serverProtocols, Client protocols: $clientProtocols, Should fail: $shouldFail")
+        logger.info("Testing: ServerAlgo: $serverAlgo, ClientAlgo: $clientAlgo, Suites: $cipherSuites, Server protocols: $serverProtocols, Client protocols: $clientProtocols, Should fail: $shouldFail")
 
         val trustStore = CertificateStore.fromResource("net/corda/nodeapi/internal/crypto/keystores/trust.jks", "trustpass", "trustpass")
         val rootCa = trustStore.value.getCertificate("root")
@@ -95,12 +100,17 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
         val serverSocketFactory = createSslContext(serverKeyStore, trustStore).serverSocketFactory
         val clientSocketFactory = createSslContext(clientKeyStore, trustStore).socketFactory
 
+        val sniServerName = "myServerName.com"
         val serverSocket = (serverSocketFactory.createServerSocket(0) as SSLServerSocket).apply {
             // use 0 to get first free socket
             val serverParams = SSLParameters(cipherSuites.algos, serverProtocols.versions)
             serverParams.wantClientAuth = true
             serverParams.needClientAuth = true
             serverParams.endpointIdentificationAlgorithm = null // Reconfirm default no server name indication, use our own validator.
+
+            // SNI server setup
+            serverParams.sniMatchers = listOf(SNIHostName.createSNIMatcher(sniServerName))
+
             sslParameters = serverParams
             useClientMode = false
         }
@@ -108,6 +118,8 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
         val clientSocket = (clientSocketFactory.createSocket() as SSLSocket).apply {
             val clientParams = SSLParameters(cipherSuites.algos, clientProtocols.versions)
             clientParams.endpointIdentificationAlgorithm = null // Reconfirm default no server name indication, use our own validator.
+            // SNI Client setup
+            clientParams.serverNames = listOf(SNIHostName(sniServerName))
             sslParameters = clientParams
             useClientMode = true
             // We need to specify this explicitly because by default the client binds to 'localhost' and we want it to bind
@@ -123,8 +135,20 @@ class TlsDiffAlgorithmsTest(private val serverAlgo: String, private val clientAl
         val testPhrase = "Hello World"
         val serverThread = thread {
             try {
-                val sslServerSocket = serverSocket.accept()
+                val sslServerSocket = serverSocket.accept() as SSLSocket
                 assertTrue(sslServerSocket.isConnected)
+
+                // Validate SNI once connected
+                val extendedSession = sslServerSocket.session as ExtendedSSLSession
+                val requestedNames = extendedSession.requestedServerNames
+                assertNotNull(requestedNames)
+                assertEquals(1, requestedNames.size)
+                val serverName = requestedNames[0]
+                assertEquals(StandardConstants.SNI_HOST_NAME, serverName.type)
+                val serverHostName = serverName as SNIHostName
+                assertEquals(sniServerName, serverHostName.asciiName)
+
+                // Validate test phrase received
                 val serverInput = DataInputStream(sslServerSocket.inputStream)
                 val receivedString = serverInput.readUTF()
                 assertEquals(testPhrase, receivedString)
