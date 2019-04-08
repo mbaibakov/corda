@@ -39,6 +39,7 @@ To this end Quasar transforms the JVM bytecode of ``@Suspendable`` functions. Ta
    fun n2() { .. }
    fun n3() { .. }
    fun n4() { .. }
+   @Suspendable fun s1() { .. }
    @Suspendable fun s2(b) { .. }
    @Suspendable fun s3() { .. }
 
@@ -126,7 +127,8 @@ Checkpoints
 
 The main idea behind checkpoints is to utilize the ``Fiber`` data structure and treat it as a serializable object capturing the state of a
 running computation. Whenever a Corda-suspendable API is hit, we capture the execution stack and corresponding entry list, and serialize
-it using Kryo. We thus get a handle to an arbitrary suspended computation.
+it using `Kryo <https://github.com/EsotericSoftware/kryo>`_, a reflection-based serialization library capable of serializing unstructured
+data. We thus get a handle to an arbitrary suspended computation.
 
 In the flow state machine there is a strict separation of the user-code's state, and the flow framework's internal state. The former is the
 serialized ``Fiber``, and the latter consists of structured objects.
@@ -212,7 +214,7 @@ indicates that control should be returned to user code.
 There are two functions that aid the above:
 
 #. ``FlowStateMachineImpl.processEventsUntilFlowIsResumed``: as the name suggests this is a loop that keeps popping and processing events
-   from the flow's event queue, until a ``FlowContinuation.Resume`` or some continuation other than `ProcessEvents` is returned.
+   from the flow's event queue, until a ``FlowContinuation.Resume`` or some continuation other than ``ProcessEvents`` is returned.
 #. ``FlowStateMachineImpl.processEventImmediately``: this function skips the event queue and processes an event immediately. There are
    certain transitions (e.g. subflow enter/exit) that must be done this way, otherwise the event ordering can cause problems.
 
@@ -271,8 +273,8 @@ scheduler.
             setLoggingContext()
 
 Thread-locals are treated in a special way when Quasar suspends/resumes. Through use of `reflection and JDK-internal unsafe operations <https://github.com/puniverse/quasar/blob/db0ac29f55bc0515023d67ab86a2178c5e6eeb94/quasar-core/src/main/java/co/paralleluniverse/concurrent/util/ThreadAccess.java>`_
-it accesses all ThreadLocals in the current thread and swaps them with ones stored in the Fiber data structure. In essense for each thread
-that executes as a Fiber we have two sets of thread locals, one set belongs to the original "non-quasar" thread, and the other belongs to
+it accesses all ThreadLocals in the current thread and swaps them with ones stored in the Fiber data structure. In essence for each thread
+that executes as a Fiber we have two sets of thread locals, one set belongs to the original "non-Quasar" thread, and the other belongs to
 the Fiber. During Fiber execution the latter is active, this is swapped with the former during suspension, and swapped back during resume.
 Note that during resume these thread-locals may actually be restored to a *different* thread than the original.
 
@@ -377,8 +379,8 @@ This structuring allows the introspection and interception of state machine tran
 interceptors. These interceptors are ``TransitionExecutor`` s that have access to a delegate. When they receive a new transition they can
 inspect it, pass it to the delegate, and do something specific to the interceptor.
 
-For example checkpoint deserializability is checked by such an interceptor (TODO link the code). It inspects a transition, and if it
-contains a Fiber checkpoint, then it checks whether it's deserializable in a separate thread.
+For example checkpoint deserializability is checked by such an `interceptor <https://github.com/corda/corda/blob/76d738c4529fd7bdfabcfd1b61d500f9259978f7/node/src/main/kotlin/net/corda/node/services/statemachine/interceptors/FiberDeserializationCheckingInterceptor.kt#L18>`_.
+It inspects a transition, and if it contains a Fiber checkpoint then it checks whether it's deserializable in a separate thread.
 
 The transition calculation is done in the ``net.corda.node.services.statemachine.transitions`` package, the top-level entry point being
 ``TopLevelTransition``. There is a ``TransitionBuilder`` helper that makes the transition definitions a bit more readable. It contains a
@@ -395,7 +397,7 @@ We take the serialized ``Fiber`` and the IO request and create a new checkpoint,
 either simply commit the database transaction and schedule a ``DoRemainingWork`` (to be explained later), or we persist the checkpoint, run
 the ``DeduplicationHandler`` inside-tx hooks, commit, then run the after-tx hooks, and schedule a ``DoRemainingWork``.
 
-Every checkpoint persistence basically implies the above steps, in this specific order.
+Every checkpoint persistence implies the above steps, in this specific order.
 
 DoRemainingWork
 ^^^^^^^^^^^^^^^
@@ -419,12 +421,12 @@ event simply does the following:
 
 It marks the error state as ``propagating = true`` and schedules a ``DoRemainingWork``. The processing of that event in turn will detect
 that we are errored and propagating, and there are some errors that haven't been propagated yet. It then propagates those errors and updates
-the "propagated index" to indicate all errors have been dealt with. Subsequent ``DoRemainingWork``s will this do nothing. However, in case
+the "propagated index" to indicate all errors have been dealt with. Subsequent ``DoRemainingWork``s will thus do nothing. However, in case
 some other error condition or external event adds another error to the flow, we would automatically propagate that too, we don't need to
 write a special case for it.
 
-Most of the state machine logic is therefore the of handling ``DoRemainingWork``. Another example is resumptions due to an IO request
-completing in some way. ``DoRemainingWork`` checks whether we are currently waiting for something to be complete e.g. a
+Most of the state machine logic is therefore about the handling ``DoRemainingWork``. Another example is resumptions due to an IO request
+completing in some way. ``DoRemainingWork`` checks whether we are currently waiting for something to complete e.g. a
 ``FlowIORequest.Receive``. It then checks whether the state contains enough data to complete the action, in the receive case this means
 checking the relevant sessions for buffered messages, and seeing whether those messages are sufficient to resume the flow with.
 
@@ -439,7 +441,7 @@ Errors
 ^^^^^^
 
 An error can manifest as either the whole flow erroring, or a specific session erroring. The former means that the whole flow is blocked
-from resumption, and it will end up in the flow hospital. A session erroring blocks only just that session. Any interaction with this
+from resumption, and it will end up in the flow hospital. A session erroring blocks only that specific session. Any interaction with this
 session will in turn error the flow. Session errors are created by a remote party propagating an error to our flow.
 
 How to modify the state machine
@@ -525,7 +527,7 @@ checkpoint is persisted the corresponding ``insideDatabaseTranscation`` hooks ar
 In-memory flow retries
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Tracking of these handlers also allows us to do in-memory retries of flows. To do this we need to re-create the flow from  the last
+Tracking of these handlers also allows us to do in-memory retries of flows. To do this we need to re-create the flow from the last
 checkpoint and retry external events internally. For every flow we have two lists of such "events", one is the yet-unprocessed event queue
 of the flow, and one is the already processed but still pending list of ``DeduplicationHandler`` s. The concatenation of these events gives
 us a handle on the list of events relevant to the flow since the last persisted checkpoint, so we just need to re-process these events. All
