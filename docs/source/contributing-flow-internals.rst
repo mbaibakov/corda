@@ -122,6 +122,11 @@ data related to the management of the ``Fiber``, e.g. its state enum or identifi
 
 The main try-catch that handles the yielding may be found `here <https://github.com/puniverse/quasar/blob/db0ac29f55bc0515023d67ab86a2178c5e6eeb94/quasar-core/src/main/java/co/paralleluniverse/fibers/Fiber.java#L790>`_.
 
+.. note:: For those adventurous enough to explore the implementation, the execution stack and method entry list are merged into two growing
+   arrays in ``Stack``, one holding ``Object`` s (``dataObject``, for structured objects), the other holding ``long`` s (``dataLong``, for
+   primitive values). The arrays always have the same length, and they both contain values for each stack frame. The primitive stack
+   additionally has a "metadata" slot for each stack frame, this is where the "method entry" value is put, as well as frame size data.
+
 Checkpoints
 -----------
 
