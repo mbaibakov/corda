@@ -2,7 +2,6 @@ package net.corda.node.services.rpc
 
 import net.corda.core.contracts.Amount
 import net.corda.core.flows.StateMachineRunId
-import net.corda.core.identity.Party
 import net.corda.core.internal.concurrent.transpose
 import net.corda.core.messaging.StateMachineUpdate
 import net.corda.core.node.services.Vault
@@ -19,7 +18,6 @@ import net.corda.node.services.Permissions
 import net.corda.testing.core.DUMMY_BANK_A_NAME
 import net.corda.testing.core.DUMMY_BANK_B_NAME
 import net.corda.testing.driver.DriverParameters
-import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.OutOfProcess
 import net.corda.testing.driver.driver
 import net.corda.testing.driver.internal.OutOfProcessImpl
@@ -205,7 +203,7 @@ class RpcReconnectTests {
                                     })
                             flowHandle.id
                         },
-                        hasFlowCompleted = {
+                        hasFlowStarted = {
                             // Query for a state that is the result of this flow.
                             val criteria = QueryCriteria.VaultCustomQueryCriteria(builder { CashSchemaV1.PersistentCashState::pennies.equal(amount.toLong() * 100) }, status = Vault.StateStatus.ALL)
                             val results = bankAReconnectingRpc.vaultQueryByCriteria(criteria, Cash.State::class.java)
@@ -213,7 +211,7 @@ class RpcReconnectTests {
                             // The flow has completed if a state is found
                             results.states.isNotEmpty()
                         },
-                        onFlowCompleted = { stateMachineRunId ->
+                        onFlowConfirmed = { stateMachineRunId ->
                             flowsCountdownLatch.countDown()
                             log.info("Flow completed for $amount. Remaining flows: ${flowsCountdownLatch.count}")
                         }

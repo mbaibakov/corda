@@ -44,7 +44,14 @@ import java.util.concurrent.TimeUnit
  * *This class is not a stable API. Any project that wants to use it, must copy and paste it.*
  */
 class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCConnection: ReconnectingRPCConnection, private val observersPool: ExecutorService) : CordaRPCOps by proxy(reconnectingRPCConnection, observersPool) {
-    constructor(nodeHostAndPort: NetworkHostAndPort, username: String, password: String, sslConfiguration: ClientRpcSslOptions? = null, observersPool: ExecutorService = Executors.newCachedThreadPool()) : this(ReconnectingRPCConnection(nodeHostAndPort, username, password, sslConfiguration), observersPool)
+    constructor(
+            nodeHostAndPort: NetworkHostAndPort,
+            username: String,
+            password: String,
+            sslConfiguration: ClientRpcSslOptions? = null,
+            classLoader: ClassLoader? = null,
+            observersPool: ExecutorService = Executors.newCachedThreadPool()
+    ) : this(ReconnectingRPCConnection(nodeHostAndPort, username, password, sslConfiguration, classLoader), observersPool)
 
     private companion object {
         private fun proxy(reconnectingRPCConnection: ReconnectingRPCConnection, observersPool: ExecutorService): CordaRPCOps {
@@ -60,21 +67,27 @@ class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCCon
 
     /**
      * This function runs a flow and retries until it completes successfully.
-     * [runFlow] is a function that starts a flow
-     * [hasFlowCompleted] is a function that checks if the flow has actually completed by checking some side-effect, for example the vault.
+     *
+     * [runFlow] is a function that starts a flow.
+     * [hasFlowStarted] is a function that checks if the flow has actually completed by checking some side-effect, for example the vault.
+     * [onFlowConfirmed] Callback when the flow is confirmed.
+     * [timeout] Indicative timeout to wait until the flow would create the side-effect. Should be increased if the flow is slow. Note that
+     * this timeout is calculated after the rpc client has reconnected to the node.
+     *
+     * Note that this method does not guarantee 100% that the flow will not be started twice.
      */
-    fun runFlowWithLogicRetry(runFlow: () -> StateMachineRunId, hasFlowCompleted: () -> Boolean, onFlowCompleted: (StateMachineRunId?) -> Unit = {}, timeout: Duration = 4.seconds) {
+    fun runFlowWithLogicRetry(runFlow: () -> StateMachineRunId, hasFlowStarted: () -> Boolean, onFlowConfirmed: (StateMachineRunId?) -> Unit = {}, timeout: Duration = 4.seconds) {
         try {
             val result = runFlow()
-            onFlowCompleted(result)
+            onFlowConfirmed(result)
         } catch (e: CouldNotStartFlowException) {
             log.error("Couldn't start flow: ${e.message}")
             retryFlowsPool.schedule(
                     {
-                        if (!hasFlowCompleted()) {
-                            runFlowWithLogicRetry(runFlow, hasFlowCompleted, onFlowCompleted, (timeout * 3) / 2)
+                        if (!hasFlowStarted()) {
+                            runFlowWithLogicRetry(runFlow, hasFlowStarted, onFlowConfirmed, timeout)
                         } else {
-                            onFlowCompleted(null)
+                            onFlowConfirmed(null)
                         }
                     },
                     timeout.seconds, TimeUnit.SECONDS
@@ -89,7 +102,8 @@ class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCCon
             val nodeHostAndPort: NetworkHostAndPort,
             val username: String,
             val password: String,
-            val sslConfiguration: ClientRpcSslOptions? = null
+            val sslConfiguration: ClientRpcSslOptions? = null,
+            val classLoader: ClassLoader?
     ) : RPCConnection<CordaRPCOps> {
         private var currentRPCConnection: CordaRPCConnection? = null
 
@@ -129,7 +143,7 @@ class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCCon
             log.info("Connecting to: $nodeHostAndPort")
             try {
                 return CordaRPCClient(
-                        nodeHostAndPort, CordaRPCClientConfiguration(connectionMaxRetryInterval = retryInterval), sslConfiguration
+                        nodeHostAndPort, CordaRPCClientConfiguration(connectionMaxRetryInterval = retryInterval), sslConfiguration, classLoader
                 ).start(username, password).also {
                     // Check connection is truly operational before returning it.
                     require(it.proxy.nodeInfo().legalIdentitiesAndCerts.isNotEmpty()) {
@@ -288,7 +302,6 @@ class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCCon
             }
         }
     }
-
 
     fun close() = reconnectingRPCConnection.forceClose()
 }
