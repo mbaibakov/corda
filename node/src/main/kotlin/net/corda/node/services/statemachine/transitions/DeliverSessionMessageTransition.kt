@@ -114,8 +114,10 @@ class DeliverSessionMessageTransition(
         val exception: Throwable = if (payload.flowException == null) {
             UnexpectedFlowEndException("Counter-flow errored", cause = null, originalErrorId = payload.errorId)
         } else {
-            payload.flowException.originalErrorId = payload.errorId
-            payload.flowException
+            payload.flowException.apply {
+                originalErrorId = payload.errorId
+                setMessage("Counter-flow threw FlowException: $message")
+            }
         }
 
         return when (sessionState) {

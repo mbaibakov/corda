@@ -183,9 +183,9 @@ class FlowFrameworkTests {
         mockNet.runNetwork()
 
         assertThatExceptionOfType(MyFlowException::class.java)
-                .isThrownBy { receivingFiber.resultFuture.getOrThrow() }
-                .withMessage("Nothing useful")
-                .withStackTraceContaining(ReceiveFlow::class.java.name)  // Make sure the stack trace is that of the receiving flow
+            .isThrownBy { receivingFiber.resultFuture.getOrThrow() }
+            .withMessage("Counter-flow threw FlowException: Nothing useful")
+            .withStackTraceContaining(ReceiveFlow::class.java.name)  // Make sure the stack trace is that of the receiving flow
         bobNode.database.transaction {
             assertThat(bobNode.internals.checkpointStorage.checkpoints()).isEmpty()
         }
@@ -206,6 +206,18 @@ class FlowFrameworkTests {
         // Make sure the original stack trace isn't sent down the wire
         val lastMessage = receivedSessionMessages.last().message as ExistingSessionMessage
         assertThat((lastMessage.payload as ErrorSessionMessage).flowException!!.stackTrace).isEmpty()
+    }
+
+    @Test
+    fun `Local FlowException has original error message`() {
+        val receivingFiber = aliceNode.services.startFlow(
+            ExceptionFlow { MyFlowException("Nothing useful") }
+        ) as FlowStateMachineImpl
+        mockNet.runNetwork()
+        assertThatExceptionOfType(MyFlowException::class.java)
+            .isThrownBy { receivingFiber.resultFuture.getOrThrow() }
+            .withMessage("Nothing useful")
+            .withStackTraceContaining(ExceptionFlow::class.java.name)
     }
 
     private class ConditionalExceptionFlow(val otherPartySession: FlowSession, val sendPayload: Any) : FlowLogic<Unit>() {
@@ -727,9 +739,9 @@ internal class ReceiveFlow(private vararg val otherParties: Party) : FlowLogic<U
     }
 }
 
-internal class MyFlowException(override val message: String) : FlowException() {
+internal class MyFlowException(message: String) : FlowException(message) {
     override fun equals(other: Any?): Boolean = other is MyFlowException && other.message == this.message
-    override fun hashCode(): Int = message.hashCode()
+    override fun hashCode(): Int = message!!.hashCode()
 }
 
 @InitiatingFlow
