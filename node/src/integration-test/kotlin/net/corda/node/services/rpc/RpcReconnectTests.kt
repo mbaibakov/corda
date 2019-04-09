@@ -177,10 +177,10 @@ class RpcReconnectTests {
             val flowProgressEvents = mutableMapOf<StateMachineRunId, MutableList<String>>()
             for (amount in (1..nrOfFlowsToRun)) {
                 // DOCSTART rpcReconnectingRPCFlowStarting
-                bankAReconnectingRpc.runFlowWithLogicRetry(
-                        runFlow = {
+                bankAReconnectingRpc.runFlowWithLogicalRetry(
+                        runFlow = { rpc ->
                             log.info("Starting CashIssueAndPaymentFlow for $amount")
-                            val flowHandle = bankAReconnectingRpc.startTrackedFlowDynamic(
+                            val flowHandle = rpc.startTrackedFlowDynamic(
                                     CashIssueAndPaymentFlow::class.java,
                                     baseAmount.plus(Amount.parseCurrency("$amount USD")),
                                     issuerRef,
@@ -203,10 +203,10 @@ class RpcReconnectTests {
                                     })
                             flowHandle.id
                         },
-                        hasFlowStarted = {
+                        hasFlowStarted = { rpc ->
                             // Query for a state that is the result of this flow.
                             val criteria = QueryCriteria.VaultCustomQueryCriteria(builder { CashSchemaV1.PersistentCashState::pennies.equal(amount.toLong() * 100) }, status = Vault.StateStatus.ALL)
-                            val results = bankAReconnectingRpc.vaultQueryByCriteria(criteria, Cash.State::class.java)
+                            val results = rpc.vaultQueryByCriteria(criteria, Cash.State::class.java)
                             log.info("$amount - Found states ${results.states}")
                             // The flow has completed if a state is found
                             results.states.isNotEmpty()

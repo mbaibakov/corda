@@ -76,16 +76,16 @@ class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCCon
      *
      * Note that this method does not guarantee 100% that the flow will not be started twice.
      */
-    fun runFlowWithLogicRetry(runFlow: () -> StateMachineRunId, hasFlowStarted: () -> Boolean, onFlowConfirmed: (StateMachineRunId?) -> Unit = {}, timeout: Duration = 4.seconds) {
+    fun runFlowWithLogicalRetry(runFlow: (CordaRPCOps) -> StateMachineRunId, hasFlowStarted: (CordaRPCOps) -> Boolean, onFlowConfirmed: (StateMachineRunId?) -> Unit = {}, timeout: Duration = 4.seconds) {
         try {
-            val result = runFlow()
+            val result = runFlow(this)
             onFlowConfirmed(result)
         } catch (e: CouldNotStartFlowException) {
             log.error("Couldn't start flow: ${e.message}")
             retryFlowsPool.schedule(
                     {
-                        if (!hasFlowStarted()) {
-                            runFlowWithLogicRetry(runFlow, hasFlowStarted, onFlowConfirmed, timeout)
+                        if (!hasFlowStarted(this)) {
+                            runFlowWithLogicalRetry(runFlow, hasFlowStarted, onFlowConfirmed, timeout)
                         } else {
                             onFlowConfirmed(null)
                         }
@@ -93,6 +93,20 @@ class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCCon
                     timeout.seconds, TimeUnit.SECONDS
             )
         }
+    }
+
+    /**
+     * This function is similar to [runFlowWithLogicalRetry] but is blocking and it returns the result of the flow.
+     *
+     * [runFlow] - starts a flow and returns the [FlowHandle].
+     * [hasFlowCompleted] - Runs a vault query and is able to recreate the result of the flow.
+     */
+    fun <T> runFlowAndReturnResultWithLogicalRetry(runFlow: (CordaRPCOps) -> FlowHandle<T>, hasFlowCompleted: (CordaRPCOps) -> T?, timeout: Duration = 4.seconds): T = try {
+        runFlow(this).returnValue.get()
+    } catch (e: CouldNotStartFlowException) {
+        log.error("Couldn't start flow: ${e.message}")
+        Thread.sleep(timeout.toMillis())
+        hasFlowCompleted(this) ?: runFlowAndReturnResultWithLogicalRetry(runFlow, hasFlowCompleted, timeout)
     }
 
     /**
