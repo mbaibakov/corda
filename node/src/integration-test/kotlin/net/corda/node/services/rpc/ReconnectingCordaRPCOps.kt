@@ -101,12 +101,14 @@ class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCCon
      * [runFlow] - starts a flow and returns the [FlowHandle].
      * [hasFlowCompleted] - Runs a vault query and is able to recreate the result of the flow.
      */
-    fun <T> runFlowAndReturnResultWithLogicalRetry(runFlow: (CordaRPCOps) -> FlowHandle<T>, hasFlowCompleted: (CordaRPCOps) -> T?, timeout: Duration = 4.seconds): T = try {
-        runFlow(this).returnValue.get()
-    } catch (e: CouldNotStartFlowException) {
-        log.error("Couldn't start flow: ${e.message}")
-        Thread.sleep(timeout.toMillis())
-        hasFlowCompleted(this) ?: runFlowAndReturnResultWithLogicalRetry(runFlow, hasFlowCompleted, timeout)
+    fun <T> runFlowAndReturnResultWithLogicalRetry(runFlow: (CordaRPCOps) -> FlowHandle<T>, hasFlowCompleted: (CordaRPCOps) -> T?, timeout: Duration = 4.seconds): T {
+        return try {
+            runFlow(this).returnValue.get()
+        } catch (e: CouldNotStartFlowException) {
+            log.error("Couldn't start flow: ${e.message}")
+            Thread.sleep(timeout.toMillis())
+            hasFlowCompleted(this) ?: runFlowAndReturnResultWithLogicalRetry(runFlow, hasFlowCompleted, timeout)
+        }
     }
 
     /**

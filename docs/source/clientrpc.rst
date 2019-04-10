@@ -356,18 +356,21 @@ Reconnecting RPC clients
 ------------------------
 
 In the current version of Corda the RPC connection and all the observervables that are created by a client will just throw exceptions and die
-when the underlying Node or TCP connection become unavailable.
+when the Node or TCP connection become unavailable.
 
-It is the clients responsibility to handle these errors and reconnect once the node is running again to keep running commands.
+It is the client's responsibility to handle these errors and reconnect once the node is running again. Running RPC commands against a stopped
+node will just throw exceptions. Previously created Observables will not emit any events after the node restarts. The client must explicitly re-run the command and
+re-subscribe to receive more events.
 
-Note that commands with side effects such as `start Flow` that don't return because the node died might actually be started on the node, but
-there is no direct way to verify on the client.
+RPCs which have a side effect, such as starting flows, may have executed on the node even if the return value is not received by the client.
+The only way to confirm is to perform a business-level query and retry accordingly. The sample `runFlowWithLogicalRetry` helps with this.
 
 In case users require such a functionality to write a resilient RPC client we have a sample that showcases how this can be implemented and also
 a thorough test that demonstrates it works as expected.
 
 The code that performs the reconnecting logic is: `ReconnectingCordaRPCOps.kt <https://github.com/corda/samples/blob/release-V|platform_version|/node/src/integration-test/kotlin/net/corda/node/services/rpc/ReconnectingCordaRPCOps.kt>`_.
-Note that this code is not exposed as an official Corda API, and must be included directly in the client codebase and adjusted.
+
+.. note:: This sample code is not exposed as an official Corda API, and must be included directly in the client codebase and adjusted.
 
 The usage is showcased in the: `RpcReconnectTests.kt <https://github.com/corda/samples/blob/release-V|platform_version|/node/src/integration-test/kotlin/net/corda/node/services/rpc/RpcReconnectTests.kt>`_.
 In case resiliency is a requirement, then it is recommended that users will write a similar test.

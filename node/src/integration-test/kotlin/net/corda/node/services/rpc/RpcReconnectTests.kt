@@ -213,7 +213,7 @@ class RpcReconnectTests {
                         },
                         onFlowConfirmed = { stateMachineRunId ->
                             flowsCountdownLatch.countDown()
-                            log.info("Flow completed for $amount. Remaining flows: ${flowsCountdownLatch.count}")
+                            log.info("Flow started for $amount. Remaining flows: ${flowsCountdownLatch.count}")
                         }
                 )
                 // DOCEND rpcReconnectingRPCFlowStarting
