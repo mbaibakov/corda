@@ -356,7 +356,7 @@ Reconnecting RPC clients
 ------------------------
 
 In the current version of Corda the RPC connection and all the observervables that are created by a client will just throw exceptions and die
-when the Node or TCP connection become unavailable.
+when the node or TCP connection become unavailable.
 
 It is the client's responsibility to handle these errors and reconnect once the node is running again. Running RPC commands against a stopped
 node will just throw exceptions. Previously created Observables will not emit any events after the node restarts. The client must explicitly re-run the command and
