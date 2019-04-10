@@ -211,7 +211,7 @@ class RpcReconnectTests {
                             // The flow has completed if a state is found
                             results.states.isNotEmpty()
                         },
-                        onFlowConfirmed = { stateMachineRunId ->
+                        onFlowConfirmed = {
                             flowsCountdownLatch.countDown()
                             log.info("Flow started for $amount. Remaining flows: ${flowsCountdownLatch.count}")
                         }

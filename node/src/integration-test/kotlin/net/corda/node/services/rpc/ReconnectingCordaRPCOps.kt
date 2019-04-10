@@ -76,10 +76,10 @@ class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCCon
      *
      * Note that this method does not guarantee 100% that the flow will not be started twice.
      */
-    fun runFlowWithLogicalRetry(runFlow: (CordaRPCOps) -> StateMachineRunId, hasFlowStarted: (CordaRPCOps) -> Boolean, onFlowConfirmed: (StateMachineRunId?) -> Unit = {}, timeout: Duration = 4.seconds) {
+    fun runFlowWithLogicalRetry(runFlow: (CordaRPCOps) -> StateMachineRunId, hasFlowStarted: (CordaRPCOps) -> Boolean, onFlowConfirmed: () -> Unit = {}, timeout: Duration = 4.seconds) {
         try {
-            val result = runFlow(this)
-            onFlowConfirmed(result)
+            runFlow(this)
+            onFlowConfirmed()
         } catch (e: CouldNotStartFlowException) {
             log.error("Couldn't start flow: ${e.message}")
             retryFlowsPool.schedule(
@@ -87,7 +87,7 @@ class ReconnectingCordaRPCOps private constructor(private val reconnectingRPCCon
                         if (!hasFlowStarted(this)) {
                             runFlowWithLogicalRetry(runFlow, hasFlowStarted, onFlowConfirmed, timeout)
                         } else {
-                            onFlowConfirmed(null)
+                            onFlowConfirmed()
                         }
                     },
                     timeout.seconds, TimeUnit.SECONDS
