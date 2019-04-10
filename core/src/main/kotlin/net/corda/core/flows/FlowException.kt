@@ -2,6 +2,7 @@ package net.corda.core.flows
 
 import net.corda.core.CordaException
 import net.corda.core.CordaRuntimeException
+import net.corda.core.identity.Party
 
 // DOCSTART 1
 /**
@@ -41,6 +42,18 @@ class UnexpectedFlowEndException(message: String, cause: Throwable?, val origina
         CordaRuntimeException(message, cause), IdentifiableException {
     constructor(message: String, cause: Throwable?) : this(message, cause, null)
     constructor(message: String) : this(message, null)
+
+    override fun getErrorId(): Long? = originalErrorId
+}
+
+/**
+ * Appended to a [FlowException] to indicate that the original [FlowException] originated from a counterparty
+ * rather than on the local node.
+ *
+ * @property counterparty the [Party] who threw the original [FlowException] that has been propagated.
+ */
+class CounterFlowException(message: String, cause: Throwable?, val counterparty: Party?, val originalErrorId: Long?) :
+    CordaException(message, cause), IdentifiableException {
 
     override fun getErrorId(): Long? = originalErrorId
 }

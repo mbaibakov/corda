@@ -184,7 +184,8 @@ class FlowFrameworkTests {
 
         assertThatExceptionOfType(MyFlowException::class.java)
             .isThrownBy { receivingFiber.resultFuture.getOrThrow() }
-            .withMessage("Counter-flow threw FlowException: Nothing useful")
+            .withMessage("Nothing useful")
+            .withCauseInstanceOf(CounterFlowException::class.java)
             .withStackTraceContaining(ReceiveFlow::class.java.name)  // Make sure the stack trace is that of the receiving flow
         bobNode.database.transaction {
             assertThat(bobNode.internals.checkpointStorage.checkpoints()).isEmpty()
@@ -206,18 +207,6 @@ class FlowFrameworkTests {
         // Make sure the original stack trace isn't sent down the wire
         val lastMessage = receivedSessionMessages.last().message as ExistingSessionMessage
         assertThat((lastMessage.payload as ErrorSessionMessage).flowException!!.stackTrace).isEmpty()
-    }
-
-    @Test
-    fun `Local FlowException has original error message`() {
-        val receivingFiber = aliceNode.services.startFlow(
-            ExceptionFlow { MyFlowException("Nothing useful") }
-        ) as FlowStateMachineImpl
-        mockNet.runNetwork()
-        assertThatExceptionOfType(MyFlowException::class.java)
-            .isThrownBy { receivingFiber.resultFuture.getOrThrow() }
-            .withMessage("Nothing useful")
-            .withStackTraceContaining(ExceptionFlow::class.java.name)
     }
 
     private class ConditionalExceptionFlow(val otherPartySession: FlowSession, val sendPayload: Any) : FlowLogic<Unit>() {

@@ -1,5 +1,6 @@
 package net.corda.node.services.statemachine.transitions
 
+import net.corda.core.flows.CounterFlowException
 import net.corda.core.flows.UnexpectedFlowEndException
 import net.corda.node.services.statemachine.Action
 import net.corda.node.services.statemachine.ConfirmSessionMessage
@@ -116,7 +117,17 @@ class DeliverSessionMessageTransition(
         } else {
             payload.flowException.apply {
                 originalErrorId = payload.errorId
-                setMessage("Counter-flow threw FlowException: $message")
+                val counterFlowException = when (sessionState) {
+                    is SessionState.Initiated -> CounterFlowException(
+                        "Counter-flow from ${sessionState.peerParty.name} threw $this",
+                        cause,
+                        counterparty = sessionState.peerParty,
+                        originalErrorId = payload.errorId
+                    )
+                    else -> CounterFlowException("Counter-flow threw $this", cause, counterparty = null, originalErrorId = payload.errorId)
+                }
+                counterFlowException.stackTrace = emptyArray()
+                setCause(counterFlowException)
             }
         }
 
